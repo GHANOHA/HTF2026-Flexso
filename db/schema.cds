@@ -110,3 +110,24 @@ entity Notifications : cuid, managed {
   message      : String;
   acknowledged : Boolean default false;
 }
+
+/**
+ * Supply rule: tells Tobin's Week Ahead which stock items to follow and how they are delivered.
+ * One row per followed item — add a row (or use the app dialog) to follow a new ingredient.
+ */
+entity SupplyRules : cuid, managed {
+  item           : Association to StockItems;
+  supplier       : String;
+  leadTimeDays   : Integer;           // days between ordering and delivery
+  saturdayFactor : Decimal(4, 2) default 1; // consumption on Saturday (market day) = rate × factor
+  lastStatus     : String;            // last status a notification was sent for (green|orange|red)
+}
+
+/** An order Tobin placed with a supplier: on its way until it is received or cancelled. */
+entity StockOrders : cuid, managed {
+  item             : Association to StockItems;
+  quantity         : Decimal(9, 2);          // ordered, in the item's `unit`
+  expectedAt       : Date;                   // the day the delivery should arrive
+  status           : String default 'open';  // open | received | cancelled
+  receivedQuantity : Decimal(9, 2);          // what actually arrived (set on receive)
+}

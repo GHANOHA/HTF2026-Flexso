@@ -1,0 +1,28 @@
+/* Tobin's Week Ahead — small touches on top of the sap_horizon_dark theme. */
+
+.tobinLogo {
+    color: var(--sapBrandColor);
+}
+
+.tobinBrief {
+    max-width: 60rem;
+    border-radius: 0.75rem;
+}
+
+.tobinBriefLine {
+    font-size: var(--sapFontLargeSize);
+}
+
+.tobinSaturday {
+    color: var(--sapInformativeTextColor);
+}
+
+.tobinHint {
+    color: var(--sapContent_LabelColor);
+}
+
+/* Standalone (outside the launchpad) the page needs the full window height. */
+html,
+body {
+    height: 100%;
+}
