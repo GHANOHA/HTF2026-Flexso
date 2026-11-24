@@ -1,0 +1,205 @@
+<mvc:View
+    controllerName="silverbrook.watergroup.controller.Main"
+    xmlns="sap.m"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns:f="sap.f"
+    xmlns:core="sap.ui.core"
+    core:require="{ DateTimeOffset: 'sap/ui/model/odata/type/DateTimeOffset' }"
+    displayBlock="true"
+    height="100%">
+    <f:DynamicPage id="page" toggleHeaderOnTitleClick="true">
+        <f:title>
+            <f:DynamicPageTitle id="pageTitle">
+                <f:heading>
+                    <HBox id="pageHeading" alignItems="Center">
+                        <core:Icon id="pageLogo" src="sap-icon://ti/building-castle" size="1.75rem" class="oakLogo sapUiSmallMarginEnd" />
+                        <Title id="pageTitleText" text="{i18n>appTitle}" level="H1" wrapping="false" />
+                    </HBox>
+                </f:heading>
+                <f:expandedContent>
+                    <Label id="pageSubtitle" text="{i18n>pageSubtitle}" />
+                </f:expandedContent>
+                <f:snappedContent>
+                    <Label id="pageSubtitleSnapped" text="{i18n>pageSubtitle}" />
+                </f:snappedContent>
+            </f:DynamicPageTitle>
+        </f:title>
+
+        <f:header>
+            <f:DynamicPageHeader id="pageHeader">
+                <FlexBox id="headerContent" wrap="Wrap" justifyContent="SpaceBetween" alignItems="Start">
+                    <Text id="pageIntro" text="{i18n>pageIntro}" class="oakIntro sapUiSmallMarginBottom" />
+                    <VBox id="rawData" class="sapUiSmallMarginBottom">
+                        <Title id="rawDataTitle" text="{i18n>rawDataTitle}" level="H3" />
+                        <Link id="rawDataWater" text="{i18n>rawDataWater}" href="/odata/v4/water-supply/" target="_blank" />
+                        <Link id="rawDataFood" text="{i18n>rawDataFood}" href="/odata/v4/food-stock/" target="_blank" />
+                    </VBox>
+                </FlexBox>
+            </f:DynamicPageHeader>
+        </f:header>
+
+        <f:content>
+            <IconTabBar id="tabs" expandable="false" headerBackgroundDesign="Transparent" class="sapUiResponsiveContentPadding">
+                <items>
+                    <!-- ============================ Water pipes ============================ -->
+                    <IconTabFilter id="tabPipes" key="pipes" icon="sap-icon://ti/droplet" text="{i18n>tabPipes}" count="{view>/counts/pipesTable}">
+                        <Table
+                            id="pipesTable"
+                            noDataText="{i18n>noData}"
+                            updateFinished=".onTableUpdateFinished"
+                            items="{ path: '/WaterPipes', sorter: { path: 'pipeID' }, templateShareable: false }">
+                            <columns>
+                                <Column id="pipeIDCol"><Text id="pipeIDHdr" text="{i18n>pipeID}" /></Column>
+                                <Column id="pipeRouteCol" minScreenWidth="Tablet" demandPopin="true"><Text id="pipeRouteHdr" text="{i18n>pipeRoute}" /></Column>
+                                <Column id="pipeTypeCol" minScreenWidth="Desktop" demandPopin="true"><Text id="pipeTypeHdr" text="{i18n>pipeType}" /></Column>
+                                <Column id="pipeNominalCol" hAlign="End"><Text id="pipeNominalHdr" text="{i18n>pipeNominalFlow}" /></Column>
+                                <Column id="pipeFlowCol" hAlign="End"><Text id="pipeFlowHdr" text="{i18n>pipeCurrentFlow}" /></Column>
+                                <Column id="pipePressureCol" hAlign="End"><Text id="pipePressureHdr" text="{i18n>pipePressure}" /></Column>
+                                <Column id="pipeMaintenanceCol" minScreenWidth="Tablet" demandPopin="true"><Text id="pipeMaintenanceHdr" text="{i18n>pipeLastMaintenance}" /></Column>
+                                <!-- 👋 EXAMPLE — the column header of the computed field (text in i18n.properties) -->
+                                <Column id="pipeDaysCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="pipeDaysHdr" text="{i18n>pipeDaysSinceMaintenance}" /></Column>
+                            </columns>
+                            <items>
+                                <ColumnListItem id="pipeRow">
+                                    <cells>
+                                        <ObjectIdentifier id="pipeIDCell" title="{pipeID}" />
+                                        <Text id="pipeRouteCell" text="{location}" />
+                                        <Text id="pipeTypeCell" text="{pipelineType}" />
+                                        <ObjectNumber id="pipeNominalCell" number="{nominalFlowRate}" unit="{i18n>unitFlow}" />
+                                        <ObjectNumber id="pipeFlowCell" number="{currentFlowRate}" unit="{i18n>unitFlow}" />
+                                        <ObjectNumber id="pipePressureCell" number="{currentPressure}" unit="{i18n>unitPressure}" />
+                                        <Text id="pipeMaintenanceCell" text="{ path: 'lastMaintenance', type: 'DateTimeOffset', formatOptions: { style: 'medium' } }" />
+                                        <!-- 👋 EXAMPLE — bind the computed field like any other: UI5 adds it to $select,
+                                             the after('READ') handler in srv/water-supply-service.ts fills it in. -->
+                                        <ObjectNumber id="pipeDaysCell" number="{daysSinceMaintenance}" unit="{i18n>unitDays}" />
+                                    </cells>
+                                </ColumnListItem>
+                            </items>
+                        </Table>
+                    </IconTabFilter>
+
+                    <!-- ============================ Sensors ============================ -->
+                    <IconTabFilter id="tabSensors" key="sensors" icon="sap-icon://ti/gauge" text="{i18n>tabSensors}" count="{view>/counts/sensorsTable}">
+                        <Table
+                            id="sensorsTable"
+                            noDataText="{i18n>noData}"
+                            updateFinished=".onTableUpdateFinished"
+                            items="{ path: '/Sensors', sorter: { path: 'sensorID' }, templateShareable: false }">
+                            <columns>
+                                <Column id="sensorIDCol"><Text id="sensorIDHdr" text="{i18n>sensorID}" /></Column>
+                                <Column id="sensorPipeCol"><Text id="sensorPipeHdr" text="{i18n>sensorPipe}" /></Column>
+                                <Column id="sensorFlowCol" hAlign="End"><Text id="sensorFlowHdr" text="{i18n>sensorFlow}" /></Column>
+                                <Column id="sensorPressureCol" hAlign="End"><Text id="sensorPressureHdr" text="{i18n>sensorPressure}" /></Column>
+                                <Column id="sensorReadingCol" minScreenWidth="Tablet" demandPopin="true"><Text id="sensorReadingHdr" text="{i18n>sensorLastReading}" /></Column>
+                            </columns>
+                            <items>
+                                <ColumnListItem id="sensorRow">
+                                    <cells>
+                                        <ObjectIdentifier id="sensorIDCell" title="{sensorID}" />
+                                        <Text id="sensorPipeCell" text="{pipe/pipeID}" />
+                                        <ObjectNumber id="sensorFlowCell" number="{flowRate}" unit="{i18n>unitFlow}" />
+                                        <ObjectNumber id="sensorPressureCell" number="{pressure}" unit="{i18n>unitPressure}" />
+                                        <Text id="sensorReadingCell" text="{ path: 'lastReading', type: 'DateTimeOffset', formatOptions: { style: 'medium' } }" />
+                                    </cells>
+                                </ColumnListItem>
+                            </items>
+                        </Table>
+                    </IconTabFilter>
+
+                    <!-- ============================ Repairs ============================ -->
+                    <IconTabFilter id="tabRepairs" key="repairs" icon="sap-icon://ti/tool" text="{i18n>tabRepairs}" count="{view>/counts/repairsTable}">
+                        <Table
+                            id="repairsTable"
+                            noDataText="{i18n>noData}"
+                            updateFinished=".onTableUpdateFinished"
+                            items="{ path: '/Repairs', sorter: { path: 'ID' }, templateShareable: false }">
+                            <columns>
+                                <Column id="repairDateCol"><Text id="repairDateHdr" text="{i18n>repairDate}" /></Column>
+                                <Column id="repairPipeCol"><Text id="repairPipeHdr" text="{i18n>repairPipe}" /></Column>
+                                <Column id="repairIssueCol" minScreenWidth="Tablet" demandPopin="true"><Text id="repairIssueHdr" text="{i18n>repairIssue}" /></Column>
+                                <Column id="repairByCol" minScreenWidth="Tablet" demandPopin="true"><Text id="repairByHdr" text="{i18n>repairBy}" /></Column>
+                            </columns>
+                            <items>
+                                <ColumnListItem id="repairRow">
+                                    <cells>
+                                        <Text id="repairDateCell" text="{ path: 'repairDate', type: 'DateTimeOffset', formatOptions: { style: 'medium' } }" />
+                                        <Text id="repairPipeCell" text="{pipe/pipeID}" />
+                                        <Text id="repairIssueCell" text="{issue}" />
+                                        <Text id="repairByCell" text="{repairedBy}" />
+                                    </cells>
+                                </ColumnListItem>
+                            </items>
+                        </Table>
+                    </IconTabFilter>
+
+                    <!-- ============================ Landmarks ============================ -->
+                    <IconTabFilter id="tabLandmarks" key="landmarks" icon="sap-icon://ti/map-pin" text="{i18n>tabLandmarks}" count="{view>/counts/landmarksTable}">
+                        <Table
+                            id="landmarksTable"
+                            noDataText="{i18n>noData}"
+                            updateFinished=".onTableUpdateFinished"
+                            items="{ path: '/Landmarks', sorter: { path: 'gridCell' }, templateShareable: false }">
+                            <columns>
+                                <Column id="landmarkNameCol"><Text id="landmarkNameHdr" text="{i18n>landmarkName}" /></Column>
+                                <Column id="landmarkKindCol"><Text id="landmarkKindHdr" text="{i18n>landmarkKind}" /></Column>
+                                <Column id="landmarkCellCol"><Text id="landmarkCellHdr" text="{i18n>landmarkCell}" /></Column>
+                                <Column id="landmarkSuppliedCol" minScreenWidth="Tablet" demandPopin="true"><Text id="landmarkSuppliedHdr" text="{i18n>landmarkSuppliedBy}" /></Column>
+                            </columns>
+                            <items>
+                                <ColumnListItem id="landmarkRow">
+                                    <cells>
+                                        <ObjectIdentifier id="landmarkNameCell" title="{name}" />
+                                        <Text id="landmarkKindCell" text="{kind}" />
+                                        <Text id="landmarkCellCell" text="{gridCell}" />
+                                        <Text id="landmarkSuppliedCell" text="{suppliedBy}" />
+                                    </cells>
+                                </ColumnListItem>
+                            </items>
+                        </Table>
+                    </IconTabFilter>
+
+                    <IconTabSeparator id="tabSeparatorFood" />
+
+                    <!-- ============================ Food stock (named model "food") ============================ -->
+                    <IconTabFilter id="tabStock" key="stock" icon="sap-icon://ti/tools-kitchen-2" text="{i18n>tabStock}" count="{view>/counts/stockTable}">
+                        <Table
+                            id="stockTable"
+                            noDataText="{i18n>noData}"
+                            updateFinished=".onTableUpdateFinished"
+                            items="{ path: 'food>/StockItems', sorter: { path: 'name' }, templateShareable: false }">
+                            <columns>
+                                <Column id="stockItemCol"><Text id="stockItemHdr" text="{i18n>stockItem}" /></Column>
+                                <Column id="stockQuantityCol" hAlign="End"><Text id="stockQuantityHdr" text="{i18n>stockQuantity}" /></Column>
+                                <Column id="stockMinCol" hAlign="End"><Text id="stockMinHdr" text="{i18n>stockMinLevel}" /></Column>
+                                <Column id="stockConsumptionCol" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="stockConsumptionHdr" text="{i18n>stockConsumption}" /></Column>
+                            </columns>
+                            <items>
+                                <ColumnListItem id="stockRow">
+                                    <cells>
+                                        <HBox id="stockItemCell" alignItems="Center">
+                                            <core:Icon id="stockIcon" src="{food>icon}" size="1.25rem" class="oakItemIcon sapUiSmallMarginEnd" />
+                                            <ObjectIdentifier id="stockName" title="{food>name}" text="{food>itemID}" />
+                                        </HBox>
+                                        <ObjectNumber id="stockQuantityCell" number="{food>currentQuantity}" unit="{food>unit}" />
+                                        <ObjectNumber id="stockMinCell" number="{food>minStockLevel}" unit="{food>unit}" />
+                                        <ObjectNumber id="stockConsumptionCell" number="{food>consumptionRate}" unit="{food>unit}" />
+                                    </cells>
+                                </ColumnListItem>
+                            </items>
+                        </Table>
+                    </IconTabFilter>
+
+                    <IconTabSeparator id="tabSeparatorMap" />
+
+                    <!-- ============================ Village map (just the picture) ============================ -->
+                    <IconTabFilter id="tabMap" key="map" icon="sap-icon://ti/map" text="{i18n>tabMap}">
+                        <VBox id="mapBox" alignItems="Center">
+                            <Image id="mapImage" src="{view>/mapUrl}" alt="{i18n>mapAlt}" width="100%" class="oakMap" />
+                            <Text id="mapCaption" text="{i18n>mapCaption}" class="oakMapCaption sapUiSmallMarginTop" />
+                        </VBox>
+                    </IconTabFilter>
+                </items>
+            </IconTabBar>
+        </f:content>
+    </f:DynamicPage>
+</mvc:View>
