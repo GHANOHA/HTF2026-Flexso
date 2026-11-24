@@ -22,6 +22,9 @@ service FoodStockService @(path: 'food-stock', impl: 'srv/food-stock-service') {
   @readonly
   entity StockOrders    as projection on db.StockOrders;
 
+  @readonly
+  entity StockCounts    as projection on db.StockCounts;
+
   // --- Tobin's Week Ahead -------------------------------------------------------------------
 
   /** One day of the forecast: the stock at the start of the day (when Tobin starts baking). */
@@ -52,6 +55,12 @@ service FoodStockService @(path: 'food-stock', impl: 'srv/food-stock-service') {
     adviceQuantity  : Decimal(9, 2); // how much to order to get through the week above the minimum (open orders deducted)
     incomingQuantity : Decimal(9, 2); // total of the open orders on their way
     nextArrivalDate : Date;         // earliest expected arrival of an open order (never in the past)
+    ratePerDay      : Decimal(9, 3); // use per normal day the forecast works with
+    dataRate        : Decimal(9, 3); // use per day in the village records
+    rateLearned     : Boolean;      // true once the forecast learned from stock counts
+    samples         : Integer;      // count intervals learned from
+    saturdayFactor  : Decimal(4, 2); // Saturday use relative to a normal day
+    lastCountedOn   : Date;         // day of the last stock count, null = never counted
     days            : many DayForecast;
   }
 
@@ -72,6 +81,15 @@ service FoodStockService @(path: 'food-stock', impl: 'srv/food-stock-service') {
 
   /** A delivery arrived that was not ordered here: adds it to the stock. */
   action receiveDelivery(item_ID : UUID, quantityReceived : Decimal(9, 2)) returns Boolean;
+
+  /** One stock count entry: what was really found on the shelf. */
+  type CountEntry {
+    item_ID  : UUID;
+    quantity : Decimal(9, 2);
+  }
+
+  /** Register a stock count (morning). Replaces the stock and teaches the forecast the real use. */
+  action recordCounts(counts : many CountEntry, countedOn : Date) returns Boolean;
 
   /** Cancel an open order. */
   action cancelOrder(order_ID : UUID) returns Boolean;

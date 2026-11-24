@@ -9,7 +9,8 @@
  * `@sap/cds` ships no TypeScript declarations in this project, so it is loaded with `require`
  * and the part of its API this file uses is described in the small interfaces below.
  */
-import { forecastItem, sortWorstFirst, type IncomingOrder, type WeekAheadItem } from './lib/stock-forecast';
+import { forecastItem, sortWorstFirst, toDateString, type IncomingOrder, type WeekAheadItem } from './lib/stock-forecast';
+import { daysBetween, learnFromCount } from './lib/stock-learning';
 import { detectChanges, startStockWatch, type StatusChange, type WatchedRule } from './lib/stock-watch';
 
 const SUPPLY_RULES = 'oakhaven.curse.SupplyRules';
@@ -17,6 +18,7 @@ const STOCK_ITEMS = 'oakhaven.curse.StockItems';
 const NOTIFICATIONS = 'oakhaven.curse.Notifications';
 const STOCK_ORDERS = 'oakhaven.curse.StockOrders';
 const STOCK_RECEIVALS = 'oakhaven.curse.StockReceivals';
+const STOCK_COUNTS = 'oakhaven.curse.StockCounts';
 
 interface SaveSupplyRuleData {
   item_ID?: string;
@@ -45,6 +47,23 @@ interface OrderRow {
   status: string | null;
 }
 
+/** Per-item data the service adds to the forecast (the rate it used and what it learned). */
+interface ItemMeta {
+  itemUUID: string;
+  ratePerDay: number;
+  dataRate: number;
+  rateLearned: boolean;
+  samples: number;
+  saturdayFactor: number;
+  lastCountedOn: string | null;
+}
+
+interface ReceivalRow {
+  item_ID: string;
+  quantityReceived: number | string | null;
+  receivedAt: string | null;
+}
+
 interface RuleRow {
   ID: string;
   item_ID: string;
@@ -52,6 +71,16 @@ interface RuleRow {
   leadTimeDays: number | null;
   saturdayFactor: number | string | null;
   lastStatus: string | null;
+  learnedRate: number | string | null;
+  learnedSaturdayFactor: number | string | null;
+  samples: number | null;
+}
+
+interface CountRow {
+  item_ID: string;
+  quantity: number | string | null;
+  countedOn: string | null;
+  createdAt: string | null;
 }
 
 interface ItemRow {
@@ -91,9 +120,10 @@ const { SELECT, INSERT, UPDATE, DELETE } = cds.ql;
 const log = cds.log('food-stock');
 
 /** Everything the forecast needs: the followed items, their rules and their forecast. */
-async function loadWeekAhead(): Promise<{ items: Array<WeekAheadItem & { itemUUID: string }>; rules: Map<string, WatchedRule> }> {
+async function loadWeekAhead(): Promise<{ items: Array<WeekAheadItem & ItemMeta>; rules: Map<string, WatchedRule> }> {
   const rules = (await SELECT.from(SUPPLY_RULES).columns(
     'ID', 'item_ID', 'supplier', 'leadTimeDays', 'saturdayFactor', 'lastStatus',
+    'learnedRate', 'learnedSaturdayFactor', 'samples',
   )) as RuleRow[];
   const watched = new Map<string, WatchedRule>();
   if (rules.length === 0) return { items: [], rules: watched };
@@ -114,13 +144,38 @@ async function loadWeekAhead(): Promise<{ items: Array<WeekAheadItem & { itemUUI
     incomingByItem.set(order.item_ID, list);
   }
 
+  const counts = (await SELECT.from(STOCK_COUNTS)
+    .columns('item_ID', 'countedOn')
+    .where({ item_ID: { in: rules.map((rule) => rule.item_ID) } })) as CountRow[];
+  const lastCountedOn = new Map<string, string>();
+  for (const count of counts) {
+    if (count.countedOn && count.countedOn > (lastCountedOn.get(count.item_ID) ?? '')) {
+      lastCountedOn.set(count.item_ID, count.countedOn);
+    }
+  }
+
   const today = new Date();
-  const items: Array<WeekAheadItem & { itemUUID: string }> = [];
+  const items: Array<WeekAheadItem & ItemMeta> = [];
   for (const rule of rules) {
     const row = stockByUUID.get(rule.item_ID);
     if (!row) continue;
+    // What the forecast uses: the rate learned from the stock counts, else the one in the records.
+    const dataRate = Number(row.consumptionRate ?? 0);
+    const samples = rule.samples ?? 0;
+    const learned = samples > 0 && rule.learnedRate !== null;
+    const ratePerDay = learned ? Number(rule.learnedRate) : dataRate;
+    const saturdayFactor =
+      samples > 0 && rule.learnedSaturdayFactor !== null
+        ? Number(rule.learnedSaturdayFactor)
+        : Number(rule.saturdayFactor ?? 1);
     items.push({
       itemUUID: row.ID,
+      ratePerDay,
+      dataRate,
+      rateLearned: learned,
+      samples,
+      saturdayFactor,
+      lastCountedOn: lastCountedOn.get(rule.item_ID) ?? null,
       ...forecastItem(
         {
           itemID: row.itemID,
@@ -129,12 +184,12 @@ async function loadWeekAhead(): Promise<{ items: Array<WeekAheadItem & { itemUUI
           unit: row.unit ?? '',
           currentQuantity: Number(row.currentQuantity ?? 0),
           minStockLevel: Number(row.minStockLevel ?? 0),
-          consumptionRate: Number(row.consumptionRate ?? 0),
+          consumptionRate: ratePerDay,
         },
         {
           supplier: rule.supplier ?? '',
           leadTimeDays: rule.leadTimeDays ?? 0,
-          saturdayFactor: Number(rule.saturdayFactor ?? 1),
+          saturdayFactor,
         },
         today,
         incomingByItem.get(rule.item_ID) ?? [],
@@ -273,6 +328,106 @@ export default class FoodStockService extends cds.ApplicationService {
       const items = await SELECT.from(STOCK_ITEMS).columns('ID').where({ ID: item_ID });
       if (items.length === 0) return req.error(404, 'Dit ingrediënt bestaat niet.', 'item_ID');
       await bookDelivery(item_ID, quantityReceived);
+      await refreshNotifications();
+      return true;
+    });
+
+    this.on('recordCounts', async (req) => {
+      const { counts, countedOn } = req.data as {
+        counts?: Array<{ item_ID?: string; quantity?: number | null }>;
+        countedOn?: string | null;
+      };
+      const todayString = toDateString(new Date());
+      const day = countedOn ?? todayString;
+      if (!ISO_DATE.test(day)) return req.error(400, 'Kies de dag waarop je geteld hebt.', 'countedOn');
+      if (day > todayString) return req.error(400, 'Je kunt niet voor een dag in de toekomst tellen.', 'countedOn');
+      const entries = (counts ?? []).filter(
+        (entry): entry is { item_ID: string; quantity: number } =>
+          Boolean(entry.item_ID) && entry.quantity !== undefined && entry.quantity !== null,
+      );
+      if (entries.length === 0) return req.error(400, 'Vul minstens één voorraad in.', 'counts');
+      if (entries.some((entry) => entry.quantity < 0)) {
+        return req.error(400, 'Een voorraad kan niet negatief zijn.', 'counts');
+      }
+
+      const ids = entries.map((entry) => entry.item_ID);
+      const [rules, previous, receivals] = (await Promise.all([
+        SELECT.from(SUPPLY_RULES)
+          .columns('ID', 'item_ID', 'saturdayFactor', 'learnedRate', 'learnedSaturdayFactor', 'samples')
+          .where({ item_ID: { in: ids } }),
+        SELECT.from(STOCK_COUNTS)
+          .columns('ID', 'item_ID', 'quantity', 'countedOn', 'createdAt')
+          .where({ item_ID: { in: ids } }),
+        SELECT.from(STOCK_RECEIVALS)
+          .columns('item_ID', 'quantityReceived', 'receivedAt')
+          .where({ item_ID: { in: ids } }),
+      ])) as [RuleRow[], Array<CountRow & { ID: string }>, ReceivalRow[]];
+      const items = (await SELECT.from(STOCK_ITEMS)
+        .columns('ID', 'consumptionRate')
+        .where({ ID: { in: ids } })) as Array<{ ID: string; consumptionRate: number | string | null }>;
+
+      for (const entry of entries) {
+        const rule = rules.find((row) => row.item_ID === entry.item_ID);
+        const item = items.find((row) => row.ID === entry.item_ID);
+        if (!item) return req.error(404, 'Dit ingrediënt bestaat niet.', 'counts');
+        const history = previous
+          .filter((count) => count.item_ID === entry.item_ID && count.countedOn)
+          .sort((a, b) => (a.countedOn ?? '').localeCompare(b.countedOn ?? ''));
+        const sameDay = history.find((count) => count.countedOn === day);
+        const before = history.filter((count) => (count.countedOn ?? '') < day).pop();
+
+        // Counted again on the same day: it is a correction, nothing new to learn from.
+        let consumed: number | null = null;
+        let days: number | null = null;
+        if (before && before.countedOn && rule && !sameDay) {
+          const received = receivals
+            .filter((receival) => {
+              const receivedDay = (receival.receivedAt ?? '').slice(0, 10);
+              return receival.item_ID === entry.item_ID && receivedDay >= before.countedOn! && receivedDay < day;
+            })
+            .reduce((sum, receival) => sum + Number(receival.quantityReceived ?? 0), 0);
+          const result = learnFromCount(
+            {
+              rate: rule.learnedRate !== null ? Number(rule.learnedRate) : Number(item.consumptionRate ?? 0),
+              saturdayFactor:
+                rule.learnedSaturdayFactor !== null ? Number(rule.learnedSaturdayFactor) : Number(rule.saturdayFactor ?? 1),
+              samples: rule.samples ?? 0,
+            },
+            {
+              previousQuantity: Number(before.quantity ?? 0),
+              received,
+              newQuantity: entry.quantity,
+              previousDate: before.countedOn,
+              newDate: day,
+            },
+          );
+          days = daysBetween(before.countedOn, day);
+          if (result) {
+            consumed = result.consumed;
+            await UPDATE(SUPPLY_RULES)
+              .set({
+                learnedRate: result.state.rate,
+                learnedSaturdayFactor: result.state.saturdayFactor,
+                samples: result.state.samples,
+              })
+              .where({ ID: rule.ID });
+            // Next item of the same request may read this rule again: keep the local copy current.
+            rule.learnedRate = result.state.rate;
+            rule.learnedSaturdayFactor = result.state.saturdayFactor;
+            rule.samples = result.state.samples;
+          }
+        }
+
+        if (sameDay) await UPDATE(STOCK_COUNTS).set({ quantity: entry.quantity }).where({ ID: sameDay.ID });
+        else {
+          await INSERT.into(STOCK_COUNTS).entries([
+            { item_ID: entry.item_ID, quantity: entry.quantity, countedOn: day, consumed, days },
+          ]);
+        }
+        // Only the latest count says what is on the shelf now; an older day is history.
+        const isLatest = history.every((count) => (count.countedOn ?? '') <= day);
+        if (isLatest) await UPDATE(STOCK_ITEMS).set({ currentQuantity: entry.quantity }).where({ ID: entry.item_ID });
+      }
       await refreshNotifications();
       return true;
     });

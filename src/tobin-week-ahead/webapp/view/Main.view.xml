@@ -1,5 +1,6 @@
 <mvc:View
     controllerName="tobin.weekahead.controller.Main"
+    class="mrTheme"
     xmlns="sap.m"
     xmlns:mvc="sap.ui.core.mvc"
     xmlns:f="sap.f"
@@ -14,7 +15,7 @@
                 <f:heading>
                     <HBox id="pageHeading" alignItems="Center">
                         <core:Icon id="pageLogo" src="sap-icon://ti/baguette" size="1.75rem" class="tobinLogo sapUiSmallMarginEnd" />
-                        <Title id="pageTitleText" text="{i18n>appTitle}" level="H1" wrapping="false" />
+                        <Title id="pageTitleText" text="{i18n>appTitle}" level="H1" wrapping="false" class="mrPageTitle" />
                     </HBox>
                 </f:heading>
                 <f:expandedContent>
@@ -35,7 +36,12 @@
             <VBox id="content" busy="{week>/busy}" class="sapUiResponsiveContentPadding">
 
                 <!-- ====================== Morning brief ====================== -->
-                <Panel id="briefPanel" headerText="{i18n>briefTitle}" class="tobinBrief sapUiSmallMarginBottom">
+                <Panel id="briefPanel" class="tobinBrief sapUiSmallMarginBottom">
+                    <headerToolbar>
+                        <Toolbar id="briefToolbar" design="Transparent">
+                            <Title id="briefTitle" text="{i18n>briefTitle}" level="H2" class="mrHeading" />
+                        </Toolbar>
+                    </headerToolbar>
                     <List id="briefList" items="{ path: 'week>/brief', templateShareable: false }" showSeparators="None">
                         <CustomListItem id="briefItem">
                             <HBox id="briefLine" alignItems="Center" class="sapUiTinyMargin">
@@ -48,8 +54,9 @@
 
                 <!-- ====================== Forecast per ingredient ====================== -->
                 <Toolbar id="forecastToolbar" class="sapUiSmallMarginTop" design="Transparent">
-                    <Title id="forecastTitle" text="{i18n>forecastTitle}" level="H2" />
+                    <Title id="forecastTitle" text="{i18n>forecastTitle}" level="H2" class="mrHeading" />
                     <ToolbarSpacer id="forecastSpacer" />
+                    <Button id="countStockButton" icon="sap-icon://inventory" text="{i18n>countStock}" press=".onCountStock" />
                     <Button id="receiveDeliveryButton" icon="sap-icon://ti/truck-delivery" text="{i18n>receiveDelivery}" press=".onReceiveDelivery" />
                     <Button id="placeOrderButton" icon="sap-icon://cart" text="{i18n>placeOrder}" type="Emphasized" press=".onPlaceOrder" />
                 </Toolbar>
@@ -62,6 +69,7 @@
                         <Column id="colOrderBy"><Text id="colOrderByHdr" text="{i18n>colOrderBy}" /></Column>
                         <Column id="colAdvice" hAlign="End" minScreenWidth="Tablet" demandPopin="true"><Text id="colAdviceHdr" text="{i18n>colAdvice}" tooltip="{i18n>adviceTooltip}" /></Column>
                         <Column id="colIncoming" minScreenWidth="Tablet" demandPopin="true"><Text id="colIncomingHdr" text="{i18n>colIncoming}" /></Column>
+                        <Column id="colRate" minScreenWidth="Desktop" demandPopin="true"><Text id="colRateHdr" text="{i18n>colRate}" /></Column>
                         <Column id="colSupplier" minScreenWidth="Desktop" demandPopin="true"><Text id="colSupplierHdr" text="{i18n>colSupplier}" /></Column>
                         <Column id="colActions" hAlign="End" width="6rem"><Text id="colActionsHdr" text="{i18n>colActions}" /></Column>
                     </columns>
@@ -78,6 +86,7 @@
                                 <ObjectStatus id="orderByCell" text="{week>orderByText}" state="{week>state}" />
                                 <ObjectNumber id="adviceCell" number="{week>adviceQuantity}" unit="{week>unit}" emphasized="true" />
                                 <ObjectStatus id="incomingCell" text="{week>incomingText}" icon="{= ${week>incomingQuantity} > 0 ? 'sap-icon://ti/truck-delivery' : '' }" state="{= ${week>incomingQuantity} > 0 ? 'Information' : 'None' }" />
+                                <ObjectIdentifier id="rateCell" title="{week>rateText}" text="{week>countedText}" />
                                 <ObjectIdentifier id="supplierCell" title="{week>supplier}" text="{week>leadTimeText}" />
                                 <HBox id="rowActions" justifyContent="End">
                                     <Button id="orderThisButton" icon="sap-icon://cart" type="Transparent" tooltip="{i18n>orderThis}" press=".onOrderThis" />
@@ -89,7 +98,7 @@
                 </Table>
 
                 <!-- ====================== Open orders ====================== -->
-                <Title id="ordersTitle" text="{i18n>ordersTitle}" level="H2" class="sapUiMediumMarginTop sapUiTinyMarginBottom" />
+                <Title id="ordersTitle" text="{i18n>ordersTitle}" level="H2" class="mrHeading sapUiMediumMarginTop sapUiTinyMarginBottom" />
                 <Table id="ordersTable" items="{ path: 'week>/orders', templateShareable: false }" noDataText="{i18n>ordersNone}">
                     <columns>
                         <Column id="ordIngredientCol"><Text id="ordIngredientHdr" text="{i18n>colIngredient}" /></Column>
@@ -113,7 +122,7 @@
                 </Table>
 
                 <!-- ====================== Day by day ====================== -->
-                <Title id="daysTitle" text="{i18n>daysTitle}" level="H2" class="sapUiMediumMarginTop sapUiTinyMarginBottom" />
+                <Title id="daysTitle" text="{i18n>daysTitle}" level="H2" class="mrHeading sapUiMediumMarginTop sapUiTinyMarginBottom" />
                 <Text id="saturdayHint" text="{i18n>saturdayHint}" class="tobinHint sapUiTinyMarginBottom" />
                 <Table id="daysTable" items="{ path: 'week>/items', templateShareable: false }" noDataText="{i18n>noItems}">
                     <columns>
@@ -143,7 +152,7 @@
                 </Table>
 
                 <!-- ====================== Notifications ====================== -->
-                <Title id="notificationsTitle" text="{i18n>notificationsTitle}" level="H2" class="sapUiMediumMarginTop sapUiTinyMarginBottom" />
+                <Title id="notificationsTitle" text="{i18n>notificationsTitle}" level="H2" class="mrHeading sapUiMediumMarginTop sapUiTinyMarginBottom" />
                 <List
                     id="notificationsList"
                     noDataText="{i18n>notificationsNone}"

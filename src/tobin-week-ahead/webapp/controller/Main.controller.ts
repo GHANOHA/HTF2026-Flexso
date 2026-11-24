@@ -58,6 +58,12 @@ interface WeekAheadData {
   adviceQuantity: number;
   incomingQuantity: number;
   nextArrivalDate: string | null;
+  ratePerDay: number;
+  dataRate: number;
+  rateLearned: boolean;
+  samples: number;
+  saturdayFactor: number;
+  lastCountedOn: string | null;
   days: DayData[];
 }
 
@@ -70,6 +76,12 @@ interface OrderRow {
   quantity: number;
   expectedText: string;
   late: boolean;
+}
+
+/** One line of the stock count dialog. */
+interface CountLine {
+  itemUUID: string;
+  quantity: string;
 }
 
 interface BriefLine {
@@ -136,6 +148,7 @@ export default class Main extends Controller {
       form: this.emptyForm(),
       order: this.emptyOrder(),
       receive: this.emptyReceive(),
+      count: { date: "", maxDate: new Date(), lines: [] },
     });
     this.getView()?.setModel(weekModel, "week");
     void this.load();
@@ -201,6 +214,35 @@ export default class Main extends Controller {
     });
   }
 
+
+  /** "Voorraad tellen": one line per followed ingredient, empty until Tobin fills in what he counted. */
+  public onCountStock(): void {
+    const items = this.getWeekModel().getProperty("/items") as Array<WeekAheadData & { name: string }>;
+    const today = new Date();
+    this.getWeekModel().setProperty("/count", {
+      date: isoDateFromToday(0),
+      maxDate: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+      lines: items.map((item) => ({
+        itemUUID: item.itemUUID,
+        name: item.name,
+        unit: item.unit,
+        current: item.currentQuantity,
+        quantity: "",
+      })),
+    });
+    void this.openDialog("CountDialog");
+  }
+
+  public async onSaveCount(): Promise<void> {
+    const count = this.getWeekModel().getProperty("/count") as { date: string; lines: CountLine[] };
+    const counts = count.lines
+      .filter((line) => line.quantity !== "" && !Number.isNaN(Number(line.quantity)))
+      .map((line) => ({ item_ID: line.itemUUID, quantity: Number(line.quantity) }));
+    const binding = this.getODataModel().bindContext("/recordCounts(...)");
+    binding.setParameter("counts", counts);
+    binding.setParameter("countedOn", count.date);
+    await this.runDialogAction(binding, "countSavedToast", "");
+  }
 
   /** "Bestelling plaatsen" in the toolbar: empty form. */
   public onPlaceOrder(): void {
@@ -432,6 +474,12 @@ export default class Main extends Controller {
       incomingText: item.incomingQuantity > 0 && item.nextArrivalDate
         ? t(bundle, "incomingText", [item.incomingQuantity, item.unit, this.dayText(item.nextArrivalDate, bundle)])
         : t(bundle, "incomingNone"),
+      rateText: item.rateLearned
+        ? t(bundle, "rateLearned", [this.round1(item.ratePerDay), item.unit, item.samples, this.round1(item.dataRate)])
+        : t(bundle, "rateData", [this.round1(item.dataRate), item.unit]),
+      countedText: item.lastCountedOn
+        ? t(bundle, "countedOn", [this.dayText(item.lastCountedOn, bundle)])
+        : t(bundle, "countedNever"),
       leadTimeText: item.leadTimeDays === 1 ? t(bundle, "leadTimeOne") : t(bundle, "leadTime", [item.leadTimeDays]),
       days: item.days.map((day) => ({ ...day, state: day.short ? "Error" : "None" })),
     };
@@ -483,6 +531,13 @@ export default class Main extends Controller {
           icon: "sap-icon://ti/help-circle",
         });
       }
+      if (item.rateLearned && item.dataRate > 0 && Math.abs(item.ratePerDay - item.dataRate) / item.dataRate >= 0.1) {
+        lines.push({
+          text: t(bundle, "briefLearned", [item.name, this.round1(item.ratePerDay), item.unit, this.round1(item.dataRate)]),
+          state: "Information",
+          icon: "sap-icon://ti/chart-line",
+        });
+      }
       if (item.incomingQuantity > 0 && item.nextArrivalDate) {
         lines.push({
           text: t(bundle, "briefIncoming", [item.name, item.incomingQuantity, item.unit, this.dayText(item.nextArrivalDate, bundle)]),
@@ -499,6 +554,9 @@ export default class Main extends Controller {
     }
     if (lines.length === 0) {
       lines.push({ text: t(bundle, "briefAllGood"), state: "Success", icon: statusToIcon("green") });
+    }
+    if (items.some((item) => item.lastCountedOn === null)) {
+      lines.push({ text: t(bundle, "briefCountHint"), state: "None", icon: "sap-icon://inventory" });
     }
     return lines;
   }
@@ -518,6 +576,10 @@ export default class Main extends Controller {
           ? t(bundle, "briefBelowMin", [item.name, item.currentQuantity, item.unit, item.minStockLevel, orderBy, item.supplier])
           : t(bundle, "briefBelowMinNoOrder", [item.name, item.currentQuantity, item.unit, item.minStockLevel]);
     }
+  }
+
+  private round1(value: number): number {
+    return Math.round(value * 10) / 10;
   }
 
   private worstState(items: WeekAheadData[]): string {

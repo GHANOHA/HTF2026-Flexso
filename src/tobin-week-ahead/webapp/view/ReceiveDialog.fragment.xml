@@ -2,7 +2,7 @@
     xmlns="sap.m"
     xmlns:core="sap.ui.core"
     xmlns:l="sap.ui.layout.form">
-    <Dialog id="receiveDialog" title="{i18n>receiveDialogTitle}" contentWidth="28rem" draggable="true">
+    <Dialog id="receiveDialog" title="{i18n>receiveDialogTitle}" contentWidth="28rem" draggable="true" class="mrTheme">
         <content>
             <l:SimpleForm id="receiveForm" editable="true" layout="ResponsiveGridLayout">
                 <Label id="receiveItemLabel" text="{i18n>dialogIngredient}" labelFor="receiveItem" required="true" />

@@ -2,7 +2,7 @@
     xmlns="sap.m"
     xmlns:core="sap.ui.core"
     xmlns:l="sap.ui.layout.form">
-    <Dialog id="orderDialog" title="{i18n>orderDialogTitle}" contentWidth="28rem" draggable="true">
+    <Dialog id="orderDialog" title="{i18n>orderDialogTitle}" contentWidth="28rem" draggable="true" class="mrTheme">
         <content>
             <l:SimpleForm id="orderForm" editable="true" layout="ResponsiveGridLayout">
                 <Label id="orderItemLabel" text="{i18n>dialogIngredient}" labelFor="orderItem" required="true" />
