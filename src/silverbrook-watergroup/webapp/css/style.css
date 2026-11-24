@@ -1,0 +1,26 @@
+/* Silverbrook — small touches on top of the sap_horizon_dark theme. Use theme parameters
+   (var(--sap…)) instead of hard-coded colours so everything stays readable. */
+
+.oakLogo {
+    color: var(--sapBrandColor);
+}
+
+.oakIntro {
+    max-width: 48rem;
+    margin-right: 2rem;
+}
+
+.oakItemIcon {
+    color: var(--sapContent_IconColor);
+}
+
+.oakMap {
+    max-width: 1200px;
+    border-radius: 0.75rem;
+    box-shadow: var(--sapContent_Shadow1);
+}
+
+.oakMapCaption {
+    max-width: 1200px;
+    color: var(--sapContent_LabelColor);
+}
